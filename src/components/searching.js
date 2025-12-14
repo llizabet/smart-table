@@ -1,15 +1,16 @@
-import {rules, createComparison} from "../lib/compare.js";
-
 export function initSearching(searchField) {
-    // настроить компаратор
-    const comparator = createComparison(
-        [rules.skipEmptyTargetValues], // пропускаем пустые значения поиска
-        [rules.searchMultipleFields(searchField, ['date', 'customer', 'seller'], false)]
-    );
-
-    return (data, state, action) => {
-        // применить компаратор
-        const searchValue = state[searchField] || '';
-        return data.filter(item => comparator(item, searchValue));
-    }
+    // Теперь не нужен компаратор, так как поиск выполняется на сервере
+    
+    return (query, state, action) => {
+        // Проверяем, что в поле поиска было что-то введено
+        if (state[searchField] && state[searchField].trim()) {
+            // Устанавливаем в query параметр search
+            return Object.assign({}, query, {
+                search: state[searchField].trim()
+            });
+        }
+        
+        // Если поле с поиском пустое, просто возвращаем query без изменений
+        return query;
+    };
 }
