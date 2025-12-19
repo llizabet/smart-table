@@ -29,9 +29,21 @@ export function initTable(settings, onAction) {
   }
 
   // Обработать события и вызвать onAction()
+  // Добавьте обработчик события input с дебаунсом
+  let debounceTimer;
+  root.container.addEventListener("input", (e) => {
+    // Для текстовых полей (особенно фильтров) используем дебаунс
+    if (e.target.type === "text") {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        onAction(e.target);
+      }, 300); // 300мс задержка
+    }
+  });
+
   // Обработка события change
-  root.container.addEventListener("change", () => {
-    onAction();
+  root.container.addEventListener("change", (e) => {
+    onAction(e.target);
   });
 
   // Обработка события reset

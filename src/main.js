@@ -1,33 +1,13 @@
-import "./fonts/ys-display/fonts.css";
-import "./style.css";
-
-import { data as sourceData } from "./data/dataset_1.js";
-
 import { initData } from "./data.js";
 import { processFormData } from "./lib/utils.js";
 
 import { initTable } from "./components/table.js";
-// Подключение модуля пагинации
 import { initPagination } from "./components/pagination.js";
-// Подключение модуля сортировки
 import { initSorting } from "./components/sorting.js";
-// Подключение модуля фильтрации
 import { initFiltering } from "./components/filtering.js";
-// Подключение модуля поиска
 import { initSearching } from "./components/searching.js";
 
-// Инициализируем API (локальный или серверный режим в зависимости от наличия sourceData)
-const api = initData(sourceData); // передаем sourceData для локального режима, или null для серверного
-
-// Глобальный объект состояния для запросов к серверу
-const apiState = {
-  page: 1,
-  rowsPerPage: 10,
-  search: "",
-  filters: {},
-  sortBy: null,
-  sortOrder: "asc",
-};
+const api = initData(); // не передаем sourceData
 
 /**
  * Сбор и обработка полей из таблицы
@@ -36,11 +16,10 @@ const apiState = {
 function collectState() {
   const state = processFormData(new FormData(sampleTable.container));
 
-  const rowsPerPage = parseInt(state.rowsPerPage); // приведём количество страниц к числу
-  const page = parseInt(state.page ?? 1); // номер страницы по умолчанию 1 и тоже число
+  const rowsPerPage = parseInt(state.rowsPerPage) || 10;
+  const page = parseInt(state.page) || 1;
 
   return {
-    // расширьте существующий return вот так
     ...state,
     rowsPerPage,
     page,
@@ -48,99 +27,73 @@ function collectState() {
 }
 
 /**
- * Формирование параметров запроса для сервера
- * @param {Object} state - текущее состояние UI
- * @returns {Object} - параметры для API запроса
- */
-function buildRequestParams(state) {
-  const params = {
-    page: state.page || 1,
-    limit: state.rowsPerPage || 10,
-  };
-
-  // Добавляем поиск
-  if (state.search && state.search.trim()) {
-    params.search = state.search.trim();
-  }
-
-  // Добавляем фильтры
-  if (state.seller) {
-    params.seller = state.seller;
-  }
-  if (state.status) {
-    params.status = state.status;
-  }
-  // Добавьте другие фильтры по аналогии
-
-  // Добавляем сортировку
-  if (state.sortBy) {
-    params.sortBy = state.sortBy;
-    params.sortOrder = state.sortOrder || "asc";
-  }
-
-  return params;
-}
-
-/**
  * Перерисовка состояния таблицы при любых изменениях
  * @param {HTMLButtonElement?} action
  */
 async function render(action) {
-  let state = collectState(); // состояние полей из таблицы
-  let query = {}; // здесь будут формироваться параметры запроса
+  console.log("Render called with action:", action?.name); // Для отладки
 
-  // Применяем поиск (обновляет query)
+  let state = collectState();
+  console.log("Collected state:", state); // Для отладки
+
+  let query = {};
+
+  // Формируем query параметры
   if (applySearching) {
     query = applySearching(query, state, action);
   }
 
-  // Применяем фильтрацию (обновляет query)
   if (applyFiltering) {
     query = applyFiltering(query, state, action);
   }
 
-  // Применяем сортировку (обновляет query)
   if (applySorting) {
     query = applySorting(query, state, action);
   }
 
-  // Применяем пагинацию (обновляет query)
   if (applyPagination) {
     query = applyPagination(query, state, action);
   }
 
-  // Получаем данные с сервера с собранными параметрами
-  const { total, items } = await api.getRecords(query);
+  console.log("Query to server:", query); // Для отладки
 
-  // Обновляем UI пагинации после получения данных
-  if (updatePagination) {
-    updatePagination(total, {
-      page: state.page || 1,
-      limit: state.rowsPerPage || 10,
-    });
+  try {
+    // Получаем данные с сервера
+    const { total, items } = await api.getRecords(query);
+    console.log("Received from server - total:", total, "items:", items.length); // Для отладки
+
+    // Обновляем UI пагинации
+    if (updatePagination) {
+      updatePagination(total, {
+        page: query.page || state.page || 1,
+        limit: query.limit || state.rowsPerPage || 10,
+      });
+    }
+
+    // Рендерим данные
+    sampleTable.render(items);
+  } catch (error) {
+    console.error("Error in render:", error);
+    sampleTable.render([]);
   }
-
-  // Рендерим данные в таблице
-  sampleTable.render(items);
 }
 
 const sampleTable = initTable(
   {
     tableTemplate: "table",
     rowTemplate: "row",
-    before: ["search", "header", "filter"], // ← Добавляем шаблон search первым
+    before: ["search", "header", "filter"],
     after: ["pagination"],
   },
   render
 );
 
-// Инициализация поиска
+// Инициализация компонентов
 let applySearching;
 if (sampleTable.search) {
-  applySearching = initSearching("search"); // передаем имя поля поиска
+  applySearching = initSearching("search");
 }
 
-// Инициализация фильтрации
 let applyFiltering;
 let updateFilterIndexes;
 if (sampleTable.filter) {
@@ -149,7 +102,6 @@ if (sampleTable.filter) {
   updateFilterIndexes = filteringFunctions.updateIndexes;
 }
 
-// Инициализация сортировки
 let applySorting;
 if (sampleTable.header) {
   applySorting = initSorting([
@@ -158,7 +110,6 @@ if (sampleTable.header) {
   ]);
 }
 
-// Инициализация пагинации
 let applyPagination;
 let updatePagination;
 if (sampleTable.pagination) {
@@ -180,37 +131,42 @@ if (sampleTable.pagination) {
 const appRoot = document.querySelector("#app");
 appRoot.appendChild(sampleTable.container);
 
-/**
- * Асинхронная функция инициализации приложения
- */
+
 async function init() {
   try {
-    // Получаем индексы (продавцов и покупателей)
+    console.log("Initializing app...");
+
+    // Получаем индексы с сервера
     const indexes = await api.getIndexes();
     console.log("Indexes loaded:", indexes);
 
-    // Обновляем фильтры после загрузки индексов
-    if (updateFilterIndexes && sampleTable.filter) {
+    // Обновляем фильтры
+    if (updateFilterIndexes && sampleTable.filter && indexes.sellers) {
       updateFilterIndexes(sampleTable.filter.elements, {
         searchBySeller: indexes.sellers,
       });
     }
 
-    return indexes;
+    // Первоначальная загрузка данных
+    await render();
   } catch (error) {
-    console.error("Error during initialization:", error);
-    return {};
+    console.error("Failed to initialize app:", error);
+    // Показываем пустую таблицу в случае ошибки
+    sampleTable.render([]);
   }
 }
 
-// Заменяем вызов render на init().then(render)
-init()
-  .then(() => {
-    // Запускаем первоначальный рендер
-    render();
-  })
-  .catch((error) => {
-    console.error("Failed to initialize app:", error);
-    // Даже если инициализация не удалась, показываем таблицу
-    render();
-  });
+// Экспортируем переменные в глобальную область
+window.render = render;
+window.sampleTable = sampleTable;
+window.api = api;
+window.applySearching = applySearching;
+window.applyFiltering = applyFiltering;
+window.applySorting = applySorting;
+window.applyPagination = applyPagination;
+window.updatePagination = updatePagination;
+
+console.log("✅ Глобальные переменные экспортированы");
+console.log("Доступны: window.render, window.sampleTable, window.api");
+
+init();
